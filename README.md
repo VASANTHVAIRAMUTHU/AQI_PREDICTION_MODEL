@@ -1,0 +1,90 @@
+# Basic libraries
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# ML libraries
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# Models
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from google.colab import files
+
+# Upload file manually if not already uploaded
+uploaded = files.upload()
+
+# Load Excel file
+file_name = "delhi_air_quality.csv.xlsx"  # make sure this matches the uploaded name
+df = pd.read_excel(file_name)
+
+df.head()
+print("Shape:", df.shape)
+print("\nColumns:\n", df.columns)
+print("\nMissing values:\n", df.isnull().sum())
+target_column = "AQI"   # Change if your column name is different
+
+X = df.drop(columns=[target_column])
+y = df[target_column]
+numeric_features = X.select_dtypes(include=np.number).columns
+
+preprocessor = Pipeline(steps=[
+    ("imputer", SimpleImputer(strategy="mean")),
+    ("scaler", StandardScaler())
+])
+X_train, X_test, y_train, y_test = train_test_split(
+    X[numeric_features], y, test_size=0.2, random_state=42
+)
+models = {
+    "Linear Regression": LinearRegression(),
+    "Random Forest": RandomForestRegressor(n_estimators=200, random_state=42),
+    "Gradient Boosting": GradientBoostingRegressor(random_state=42)
+}
+
+results = {}
+
+for name, model in models.items():
+    pipe = Pipeline(steps=[
+        ("preprocessing", preprocessor),
+        ("model", model)
+    ])
+    
+    pipe.fit(X_train, y_train)
+    preds = pipe.predict(X_test)
+    
+    results[name] = {
+        "MAE": mean_absolute_error(y_test, preds),
+        "RMSE": np.sqrt(mean_squared_error(y_test, preds)),
+        "R2": r2_score(y_test, preds)
+    }
+
+results_df = pd.DataFrame(results).T
+results_df
+best_model = Pipeline(steps=[
+    ("preprocessing", preprocessor),
+    ("model", RandomForestRegressor(n_estimators=200, random_state=42))
+])
+
+best_model.fit(X_train, y_train)
+preds = best_model.predict(X_test)
+
+plt.figure(figsize=(6,6))
+plt.scatter(y_test, preds, alpha=0.6)
+plt.xlabel("Actual AQI")
+plt.ylabel("Predicted AQI")
+plt.title("Actual vs Predicted AQI")
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
+plt.show()
+# Example: Use first row as a sample
+sample = X.iloc[[0]][numeric_features]
+
+predicted_aqi = best_model.predict(sample)
+print("Predicted AQI:", predicted_aqi[0])
+import joblib
+joblib.dump(best_model, "aqi_prediction_model.pkl")
+files.download("aqi_prediction_model.pkl")
